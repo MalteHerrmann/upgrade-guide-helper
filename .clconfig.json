@@ -1,0 +1,16 @@
+{
+  "categories": [
+    "all",
+    "git",
+    "llm",
+    "tests"
+  ],
+  "change_types": {
+    "Bug Fixes": "bug\\s*fixes",
+    "Features": "features",
+    "Improvements": "improvements"
+  },
+  "expected_spellings": {},
+  "legacy_version": null,
+  "target_repo": "https://github.com/MalteHerrmann/upgrade-guide-helper"
+}
