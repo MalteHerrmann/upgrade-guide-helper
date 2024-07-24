@@ -10,4 +10,4 @@ lint:
 
 # Runs the tool
 run:
-	@python3
+	@python3 main.py
