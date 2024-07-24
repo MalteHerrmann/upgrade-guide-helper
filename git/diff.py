@@ -4,7 +4,6 @@ git tags in the given repository.
 """
 
 import os
-import sys
 import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Union
@@ -46,7 +45,9 @@ def get_filtered_diff(dc: DiffConfig) -> DiffResult:
     filtered_changes = []
 
     for file, changes in result.diff.items():
-        filtered_changes = [change for change in changes if "github.com/evmos/evmos/v" not in change]
+        filtered_changes = [
+            change for change in changes if "github.com/evmos/evmos/v" not in change
+        ]
         if len(filtered_changes) == 0:
             continue
         filtered_diff[file] = filtered_changes
@@ -74,14 +75,18 @@ def get_diff_in_folder(dc: DiffConfig) -> Union[DiffResult, None]:
         dc.working_dir,
     )
     if not out:
-        raise Exception("failed to get diff")
+        raise ValueError("failed to get diff")
 
     out_diff = {}
     for rel_path in out.split():
-        out_diff[rel_path.decode()] = run_in_path(
-            ["git", "--no-pager", "diff", dc.from_version, dc.to_version, rel_path],
-            dc.working_dir,
-        ).decode().splitlines()
+        out_diff[rel_path.decode()] = (
+            run_in_path(
+                ["git", "--no-pager", "diff", dc.from_version, dc.to_version, rel_path],
+                dc.working_dir,
+            )
+            .decode()
+            .splitlines()
+        )
 
     return DiffResult(diff=out_diff)
 
@@ -93,7 +98,7 @@ def run_in_path(args: List[str], path: str):
     source_dir = os.getcwd()
 
     os.chdir(path)
-    out = subprocess.run(args, capture_output=True)
+    out = subprocess.run(args, capture_output=True, check=False)
     os.chdir(source_dir)
 
     return out.stdout
@@ -105,4 +110,6 @@ def clone_repo(dc: DiffConfig) -> str:
     into a temporary folder for the script to execute in.
     """
     # TODO: only clone the needed tags
-    subprocess.run(["git", "clone", dc.repo, dc.working_dir], capture_output=True)
+    subprocess.run(
+        ["git", "clone", dc.repo, dc.working_dir], capture_output=True, check=False
+    )

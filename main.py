@@ -10,8 +10,8 @@ an evmOS-based blockchain codebase.
 import tempfile
 from shutil import rmtree
 
-from git import get_filtered_diff, DiffConfig
-from summary import summarize
+from .git import get_filtered_diff, DiffConfig
+from .summary import summarize
 
 
 def run():

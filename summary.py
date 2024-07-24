@@ -1,3 +1,9 @@
+"""
+Contains the required logic to call the LLM
+to request a summary of the provided changes
+between two versions.
+"""
+
 import os
 from typing import Dict
 from openai import OpenAI
@@ -50,9 +56,14 @@ data migrations or the introduction or removal of modules.
 """
 
 
-def summarize(diff: DiffResult):
+def summarize(diff: DiffResult) -> None:
+    """
+    Runs the full logic to summarize the changes between
+    two versions.
+    """
     app_changes = None
     upgrades_changes = {}
+    deps_changes = None
 
     for file, changes in diff.diff.items():
         joint_changes = "\n".join(changes)
@@ -62,7 +73,6 @@ def summarize(diff: DiffResult):
             upgrades_changes[file] = joint_changes
         elif REL_PATH_GO_MOD == file:
             deps_changes = joint_changes
-
 
     if deps_changes:
         answer = call_llm(GO_MOD_PROMPT, deps_changes)
@@ -77,24 +87,25 @@ def summarize(diff: DiffResult):
         print(answer)
 
 
-def summarize_app_changes(changes: str):
-    answer = call_llm(APP_CHANGE_PROMPT, changes)
-
-
-def summarize_upgrade_changes(changes: Dict[str, str]):
+def summarize_upgrade_changes(changes: Dict[str, str]) -> str:
+    """
+    Prepares the upgrade changes prompt and calls the LLM.
+    """
     upgrade_changes = []
     for file, change in changes.items():
         upgrade_changes.append(f"{file}:\n{change}")
-    
+
     upgrade_string = "\n".join(upgrade_changes)
     return call_llm(UPGRADE_CHANGE_PROMPT, upgrade_string)
 
 
-def call_llm(context: str, user_prompt: str):
+def call_llm(context: str, user_prompt: str) -> str:
+    """
+    Calls the OpenAI API with the given context and user prompts.
+    """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key or "sk-" not in api_key[:3]:
-        print("OpenAI API key not found")
-        return
+        raise ValueError("OpenAI API key not found")
 
     client = OpenAI(
         api_key=api_key,
@@ -109,10 +120,9 @@ def call_llm(context: str, user_prompt: str):
             {
                 "role": "user",
                 "content": user_prompt,
-            }
+            },
         ],
         model="gpt-4o-mini",
     )
 
     return chat_completion.choices[0].message.content
-
