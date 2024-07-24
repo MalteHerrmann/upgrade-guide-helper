@@ -7,26 +7,31 @@ This tool aids in creating upgrade guides between distinct versions of
 an evmOS-based blockchain codebase.
 """
 
-import shutil
+import tempfile
+from shutil import rmtree
 
-from git import get_diff_without_imports, DiffConfig
+from git import get_filtered_diff, DiffConfig
+from summary import summarize
 
 
 def run():
     """
     The main function to run the tool.
     """
+    dc = DiffConfig(
+        from_version="v15.0.0",
+        to_version="v16.0.4",
+        repo="https://github.com/evmos/evmos",
+        working_dir=tempfile.mkdtemp(),
+    )
+
     try:
-        diff = get_diff_without_imports(DiffConfig(
-            from_version = "v15.0.0",
-            to_version = "v16.0.4",
-            repo = "https://github.com/evmos/evmos",
-        ))
-        print(diff)
+        diff = get_filtered_diff(dc)
     finally:
-        # # if input("Clean up the temporary working directory? (y/n)\n") == "y":
-        print(f"cleaning up {diff.temp_dir}")
-        shutil.rmtree(diff.temp_dir)
+        print(f"cleaning up {dc.working_dir}")
+        rmtree(dc.working_dir)
+
+    summarize(diff)
 
 
 if __name__ == "__main__":
