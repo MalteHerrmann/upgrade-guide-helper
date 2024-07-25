@@ -10,8 +10,8 @@ an evmOS-based blockchain codebase.
 import tempfile
 from shutil import rmtree
 
-from .git import get_filtered_diff, DiffConfig
-from .summary import summarize
+from models import Models, summarize
+from git import get_filtered_diff, DiffConfig
 
 
 def run():
@@ -19,6 +19,7 @@ def run():
     The main function to run the tool.
     """
     dc = DiffConfig(
+        llm=Models.SONNET,
         from_version="v15.0.0",
         to_version="v16.0.4",
         repo="https://github.com/evmos/evmos",
@@ -31,7 +32,7 @@ def run():
         print(f"cleaning up {dc.working_dir}")
         rmtree(dc.working_dir)
 
-    summarize(diff)
+    summarize(dc.llm, diff)
 
 
 if __name__ == "__main__":

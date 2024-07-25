@@ -6,9 +6,11 @@ between two versions.
 
 import os
 from typing import Dict
+from anthropic import Anthropic
 from openai import OpenAI
 
 from git import DiffResult
+from .models import Models
 
 
 REL_PATH_APP = "app/app.go"
@@ -56,7 +58,7 @@ data migrations or the introduction or removal of modules.
 """
 
 
-def summarize(diff: DiffResult) -> None:
+def summarize(model, diff: DiffResult) -> None:
     """
     Runs the full logic to summarize the changes between
     two versions.
@@ -75,19 +77,19 @@ def summarize(diff: DiffResult) -> None:
             deps_changes = joint_changes
 
     if deps_changes:
-        answer = call_llm(GO_MOD_PROMPT, deps_changes)
+        answer = call_llm(model, GO_MOD_PROMPT, deps_changes)
         print(answer)
 
     if app_changes:
-        answer = call_llm(APP_CHANGE_PROMPT, app_changes)
+        answer = call_llm(model, APP_CHANGE_PROMPT, app_changes)
         print(answer)
 
     if upgrades_changes:
-        answer = summarize_upgrade_changes(upgrades_changes)
+        answer = summarize_upgrade_changes(model, upgrades_changes)
         print(answer)
 
 
-def summarize_upgrade_changes(changes: Dict[str, str]) -> str:
+def summarize_upgrade_changes(model, changes: Dict[str, str]) -> str:
     """
     Prepares the upgrade changes prompt and calls the LLM.
     """
@@ -96,33 +98,61 @@ def summarize_upgrade_changes(changes: Dict[str, str]) -> str:
         upgrade_changes.append(f"{file}:\n{change}")
 
     upgrade_string = "\n".join(upgrade_changes)
-    return call_llm(UPGRADE_CHANGE_PROMPT, upgrade_string)
+    return call_llm(model, UPGRADE_CHANGE_PROMPT, upgrade_string)
 
 
-def call_llm(context: str, user_prompt: str) -> str:
+def call_llm(model, context: str, user_prompt: str) -> str:
     """
     Calls the OpenAI API with the given context and user prompts.
     """
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key or "sk-" not in api_key[:3]:
-        raise ValueError("OpenAI API key not found")
+    if model == Models.GPT:
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key or "sk-" not in api_key[:3]:
+            raise ValueError("OpenAI API key not found")
 
-    client = OpenAI(
-        api_key=api_key,
-    )
+        client = OpenAI(
+            api_key=api_key,
+        )
 
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "system",
-                "content": context,
-            },
-            {
-                "role": "user",
-                "content": user_prompt,
-            },
-        ],
-        model="gpt-4o-mini",
-    )
+        answer = (
+            client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": context,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_prompt,
+                    },
+                ],
+            )
+            .choices[0]
+            .message.content
+        )
 
-    return chat_completion.choices[0].message.content
+    elif model == Models.SONNET:
+        anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+        client = Anthropic(api_key=anthropic_key)
+
+        answer = (
+            client.messages.create(
+                model="claude-3-5-sonnet-20240620",
+                max_tokens=4096,
+                system=context,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": user_prompt,
+                    },
+                ],
+            )
+            .content[0]
+            .text
+        )
+
+    else:
+        raise ValueError(f"{model} not supported")
+
+    return answer

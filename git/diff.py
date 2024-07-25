@@ -15,6 +15,7 @@ class DiffConfig:
     Holds the required information of the diff to obtain.
     """
 
+    llm: str
     from_version: str
     to_version: str
     repo: str
