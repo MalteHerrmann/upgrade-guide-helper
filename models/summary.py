@@ -13,10 +13,6 @@ from git import DiffResult
 from .models import ANTHROPIC_MODELS, GPT_MODELS
 
 
-CHANGES_LINES_LIMIT = 5_000
-REL_PATH_APP = "app/app.go"
-REL_PATH_GO_MOD = "go.mod"
-REL_PATH_UPGRADES = "app/upgrades"
 CONTEXT_PROMPT = """
 You are a code change analyzer, specialized in providing a
 summary of the made changes in a Git diff output.
@@ -35,6 +31,11 @@ as a dependency.
 You will be presented with a JSON structure, containing Git diff outputs
 for the different relevant files between two major versions of
 the Evmos codebase.
+
+The CHANGELOG.md changes should serve as a guiding piece of context, as this
+will provide some context to the severity of some changes. State Machine Breaking
+and API breaking changes are bigger changes compared to those under `improvements`
+or `bug fixes.`
 
 The changes in the go.mod file should be scanned for version adjustments
 and/or changes to Evmos' main dependencies, which are Cosmos SDK, IBC-Go
@@ -57,7 +58,8 @@ data migrations or the addition/removal of individual modules.
 For all the listed Go files to analyze, you do not need to mention any changes in
 module imports in the given files, just focus on the logic changes.
 
-Please provide a summary in Markdown format, that is grouped for these three categories:
+Please provide a summary in Markdown format, that is grouped for these categories:
+- changelog entries
 - dependency upgrades
 - application wiring
 - upgrade logic.
@@ -69,17 +71,10 @@ def summarize(model, diff: DiffResult) -> str:
     Runs the full logic to summarize the changes between
     two versions.
     """
-    changes_to_summarize = {}
-
-    for file, changes in diff.diff.items():
-        joint_changes = "\n".join(changes)
-        if file in [REL_PATH_APP, REL_PATH_GO_MOD] or REL_PATH_UPGRADES in file:
-            changes_to_summarize[file] = joint_changes
-
-    if not changes_to_summarize:
+    if not diff.diff:
         raise ValueError("found no changes to summarize")
 
-    return call_llm(model, CONTEXT_PROMPT, dumps(changes_to_summarize))
+    return call_llm(model, CONTEXT_PROMPT, dumps(diff.diff))
 
 
 def call_llm(model, context: str, user_prompt: str) -> str:

@@ -36,9 +36,6 @@ def run(model: str, from_version: str, to_version: str):
         print(f"cleaning up {dc.working_dir}")
         rmtree(dc.working_dir)
 
-    if not diff.diff:
-        raise ValueError("got empty diff")
-
     summary = summarize(dc.llm, diff)
     print(summary)
 

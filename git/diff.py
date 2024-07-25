@@ -4,9 +4,23 @@ git tags in the given repository.
 """
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Union
+
+
+CHANGES_LINES_LIMIT = 5_000
+REL_PATHS = [
+    "app/app.go",
+    "CHANGELOG.md",
+    "go.mod"
+]
+REL_PATH_UPGRADES = "app/upgrades"
+IGNORED_PATTERNS = [
+    r"constants.go$",
+    "app/upgrades/.+_test.go$"
+]
 
 
 @dataclass
@@ -46,12 +60,22 @@ def get_filtered_diff(dc: DiffConfig) -> DiffResult:
     filtered_changes = []
 
     for file, changes in result.diff.items():
+        if file not in REL_PATHS and not REL_PATH_UPGRADES in file:
+            continue
+
+        if any(re.search(file, pattern) for pattern in IGNORED_PATTERNS):
+            continue
+
         filtered_changes = [
             change for change in changes if "github.com/evmos/evmos/v" not in change
         ]
         if len(filtered_changes) == 0:
             continue
-        filtered_diff[file] = filtered_changes
+
+        if len(filtered_changes) > CHANGES_LINES_LIMIT:
+            print(f"skipping changes in {file}, which are exceeding the limit of {CHANGES_LINES_LIMIT} changes")
+
+        filtered_diff[file] = "\n".join(filtered_changes)
 
     return DiffResult(filtered_diff)
 
