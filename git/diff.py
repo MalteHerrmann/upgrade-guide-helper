@@ -50,7 +50,6 @@ def get_filtered_diff(dc: DiffConfig) -> DiffResult:
     result = get_diff(dc)
 
     filtered_diff = {}
-    filtered_changes = []
 
     for file, changes in result.diff.items():
         if file not in INCLUDED_FILES and not REL_PATH_UPGRADES in file:

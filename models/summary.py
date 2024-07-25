@@ -63,6 +63,9 @@ Please provide a summary in Markdown format, that is grouped for these categorie
 - dependency upgrades
 - application wiring
 - upgrade logic.
+
+As it is expected to receive Markdown content, please refrain from wrapping the output in
+Markdown codeblocks. Only use codeblocks for actual code changes being shown.
 """
 
 
