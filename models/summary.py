@@ -5,18 +5,19 @@ between two versions.
 """
 
 import os
-from typing import Dict
+from json import dumps
 from anthropic import Anthropic
 from openai import OpenAI
 
 from git import DiffResult
-from .models import Models
+from .models import ANTHROPIC_MODELS, GPT_MODELS
 
 
+CHANGES_LINES_LIMIT = 5_000
 REL_PATH_APP = "app/app.go"
 REL_PATH_GO_MOD = "go.mod"
 REL_PATH_UPGRADES = "app/upgrades"
-APP_CHANGE_PROMPT = """
+CONTEXT_PROMPT = """
 You are a code change analyzer, specialized in providing a
 summary of the made changes in a Git diff output.
 The code base is based on Evmos, a Cosmos SDK-based blockchain
@@ -25,87 +26,67 @@ the native elements of this framework when deriving and
 providing the summary of the changes in the main application
 wiring.
 
-Specifically, pay attention to changes to the code structure
-or additions of modules or module keepers.
+There are other chains building on top of the Evmos codebase,
+which should be provided with guides for the necessary changes,
+that they need to make to their codebases, to upgrade their chains
+accordingly when bumping the version of Evmos that they are using
+as a dependency.
+
+You will be presented with a JSON structure, containing Git diff outputs
+for the different relevant files between two major versions of
+the Evmos codebase.
+
+The changes in the go.mod file should be scanned for version adjustments
+and/or changes to Evmos' main dependencies, which are Cosmos SDK, IBC-Go
+and Go-Ethereum. Please also be mindful of changes to the replace directives
+of the corresponding forks. Do not mention changes in other dependencies as
+they are not relevant.
+
+The changes in the app/app.go file are critical as they reflect the wiring
+of the main application. Please provide a clean summary of things adjusted in this
+file including the corresponding new lines in form of code blocks, which are
+to be shared with customers. Common changes here include additions or removals of methods,
+that include module keepers and other related store entries.
+When the Cosmos SDK dependency is upgraded in go.mod, it is also common for the app.go file
+to include more drastic changes as a result of the underlying dependency changing.
+
+The changes in Go files with a path of app/upgrades/... define the necessary upgrade logic
+for the chain to run. This will usually include parameter adjustments,
+data migrations or the addition/removal of individual modules.
+
+For all the listed Go files to analyze, you do not need to mention any changes in
+module imports in the given files, just focus on the logic changes.
+
+Please provide a summary in Markdown format, that is grouped for these three categories:
+- dependency upgrades
+- application wiring
+- upgrade logic.
 """
-GO_MOD_PROMPT = """
-You are a code change analyzer, specialized in providing a concise
-summary of changes introduced to a Go module file.
-The provided input will be the Git diff output between
-the go.mod files of two compared versions.
-
-The target codebase is Evmos, a Cosmos SDK-based blockchain that
-offers an EVM implementation.
-
-Please make sure to only stick to version changes of the most important
-dependencies: Cosmos SDK, IBC-Go and Go-Ethereum.
-Please also mind the replace directives for Evmos' own forks.
-If there are no changes to the listed main dependencies, please provide no output.
-"""
-UPGRADE_CHANGE_PROMPT = """
-You are a code change analyzer, specialized in providing
-a written summary of the made changes in a series of
-Git diff outputs.
-
-These outputs describe the changes between two versions of Evmos,
-a Cosmos SDK-based blockchain that offers an EVM implementation,
-which means that the upgrade logic in the given changes relate to
-a chain upgrade of the underlying blockchain.
-
-Please provide a concise summary of the upgrade logic
-at hand. Usually this will include parameter adjustments,
-data migrations or the introduction or removal of modules.
-"""
 
 
-def summarize(model, diff: DiffResult) -> None:
+def summarize(model, diff: DiffResult) -> str:
     """
     Runs the full logic to summarize the changes between
     two versions.
     """
-    app_changes = None
-    upgrades_changes = {}
-    deps_changes = None
+    changes_to_summarize = {}
 
     for file, changes in diff.diff.items():
         joint_changes = "\n".join(changes)
-        if file == REL_PATH_APP:
-            app_changes = joint_changes
-        elif REL_PATH_UPGRADES in file:
-            upgrades_changes[file] = joint_changes
-        elif REL_PATH_GO_MOD == file:
-            deps_changes = joint_changes
+        if file in [REL_PATH_APP, REL_PATH_GO_MOD] or REL_PATH_UPGRADES in file:
+            changes_to_summarize[file] = joint_changes
 
-    if deps_changes:
-        answer = call_llm(model, GO_MOD_PROMPT, deps_changes)
-        print(answer)
+    if not changes_to_summarize:
+        raise ValueError("found no changes to summarize")
 
-    if app_changes:
-        answer = call_llm(model, APP_CHANGE_PROMPT, app_changes)
-        print(answer)
-
-    if upgrades_changes:
-        answer = summarize_upgrade_changes(model, upgrades_changes)
-        print(answer)
-
-
-def summarize_upgrade_changes(model, changes: Dict[str, str]) -> str:
-    """
-    Prepares the upgrade changes prompt and calls the LLM.
-    """
-    upgrade_changes = []
-    for file, change in changes.items():
-        upgrade_changes.append(f"{file}:\n{change}")
-
-    upgrade_string = "\n".join(upgrade_changes)
-    return call_llm(model, UPGRADE_CHANGE_PROMPT, upgrade_string)
+    return call_llm(model, CONTEXT_PROMPT, dumps(changes_to_summarize))
 
 
 def call_llm(model, context: str, user_prompt: str) -> str:
     """
     Calls the OpenAI API with the given context and user prompts.
     """
-    if model == Models.GPT:
+    if model in GPT_MODELS:
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key or "sk-" not in api_key[:3]:
             raise ValueError("OpenAI API key not found")
@@ -116,7 +97,7 @@ def call_llm(model, context: str, user_prompt: str) -> str:
 
         answer = (
             client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {
                         "role": "system",
@@ -132,13 +113,13 @@ def call_llm(model, context: str, user_prompt: str) -> str:
             .message.content
         )
 
-    elif model == Models.SONNET:
+    elif model in ANTHROPIC_MODELS:
         anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
         client = Anthropic(api_key=anthropic_key)
 
         answer = (
             client.messages.create(
-                model="claude-3-5-sonnet-20240620",
+                model=model,
                 max_tokens=4096,
                 system=context,
                 messages=[

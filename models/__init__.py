@@ -4,4 +4,4 @@ the language models to get the summary.
 """
 
 from .summary import summarize
-from .models import Models
+from .models import AVAILABLE_MODELS

@@ -75,17 +75,17 @@ def get_diff_in_folder(dc: DiffConfig) -> Union[DiffResult, None]:
         ["git", "--no-pager", "diff", dc.from_version, dc.to_version, "--name-only"],
         dc.working_dir,
     )
-    if not out:
-        raise ValueError("failed to get diff")
+    if out.returncode or not out.stdout:
+        raise ValueError(f"failed to get diff: {out.stderr}")
 
     out_diff = {}
-    for rel_path in out.split():
+    for rel_path in out.stdout.split():
         out_diff[rel_path.decode()] = (
             run_in_path(
                 ["git", "--no-pager", "diff", dc.from_version, dc.to_version, rel_path],
                 dc.working_dir,
             )
-            .decode()
+            .stdout.decode()
             .splitlines()
         )
 
@@ -102,7 +102,7 @@ def run_in_path(args: List[str], path: str):
     out = subprocess.run(args, capture_output=True, check=False)
     os.chdir(source_dir)
 
-    return out.stdout
+    return out
 
 
 def clone_repo(dc: DiffConfig) -> str:
