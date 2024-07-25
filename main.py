@@ -9,11 +9,15 @@ an evmOS-based blockchain codebase.
 
 import tempfile
 import sys
+from datetime import datetime
 from getopt import gnu_getopt
 from shutil import rmtree
 
 from models import AVAILABLE_MODELS, summarize
 from git import get_filtered_diff, DiffConfig
+
+
+EXPORT_FOLDER = "summaries"
 
 
 def run(model: str, from_version: str, to_version: str):
@@ -37,8 +41,31 @@ def run(model: str, from_version: str, to_version: str):
         rmtree(dc.working_dir)
 
     summary = summarize(dc.llm, diff)
-    print(summary)
+    export_summary(dc, summary)
 
+
+def export_summary(dc: DiffConfig, summary: str):
+    """
+    Writes the retrieved summary to a file with
+    some metadata on the used configuration.
+    """
+    now = datetime.now()
+    time_prefix = f"{now.year:4d}{now.month:02d}{now.day:02d}_{now.hour:02d}{now.minute:02d}{now.second:02d}"
+    filepath = f"{EXPORT_FOLDER}/{time_prefix}_{dc.from_version}_{dc.to_version}_{dc.llm}.md"
+
+    with open(filepath, "x") as f:
+        f.writelines([
+            "| option | value |\n",
+            "| ------ | ----- |\n",
+            f"| from | {dc.from_version} |\n",
+            f"| to | {dc.to_version} |\n",
+            f"| model | {dc.llm} |\n",
+            f"| repo | {dc.repo} |\n",
+            "\n"
+        ])
+        f.write(summary)
+    
+    print(f"exported summary to {filepath}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
